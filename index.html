@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PacientesXWSP - Estrategia Médica</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fuentes -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Estilos Personalizados -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .secret-trigger { cursor: text; user-select: none; }
+    </style>
+
+    <!-- React y ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-50 text-gray-900">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // ==========================================
+        // 🚨 PASO FINAL: PEGA TUS CREDENCIALES AQUÍ 🚨
+        // Copia el objeto 'const firebaseConfig' de tu consola de Firebase 
+        // y reemplaza el bloque de abajo.
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "PEGA_TU_API_KEY_AQUI", 
+            authDomain: "pacientesxwasap.firebaseapp.com",
+            projectId: "pacientesxwasap",
+            storageBucket: "pacientesxwasap.appspot.com",
+            messagingSenderId: "TU_SENDER_ID",
+            appId: "TU_APP_ID"
+        };
+        // ==========================================
+
+        const RECURSOS_CONFIG = {
+            GUIA_COMPORTAMIENTO: "https://drive.google.com/drive/folders/1DSpZKMy--kY428ZJD1kmRIiTqmiHAlNn?usp=sharing",
+            SCRIPTS_VENTAS: "https://drive.google.com/drive/folders/1DSpZKMy--kY428ZJD1kmRIiTqmiHAlNn?usp=sharing"
+        };
+
+        // --- Inicialización de Firebase ---
+        let app, auth, db;
+        let isDemoMode = false;
+
+        try {
+            if (firebaseConfig.apiKey === "PEGA_TU_API_KEY_AQUI") {
+                console.warn("⚠️ Firebase no configurado. Usando modo demostración.");
+                isDemoMode = true;
+            } else {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+            }
+        } catch (e) {
+            console.error("Error al iniciar Firebase:", e);
+            isDemoMode = true;
+        }
+
+        // --- Componentes de Iconos ---
+        const IconBase = ({ d, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>{d}</svg>
+        );
+
+        const Icons = {
+            BookOpen: (p) => <IconBase {...p} d={<><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></>} />,
+            Download: (p) => <IconBase {...p} d={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />,
+            MessageCircle: (p) => <IconBase {...p} d={<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>} />,
+            User: (p) => <IconBase {...p} d={<><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>} />,
+            Mail: (p) => <IconBase {...p} d={<><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></>} />,
+            CheckCircle: (p) => <IconBase {...p} d={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} />,
+            ArrowRight: (p) => <IconBase {...p} d={<><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>} />,
+            Brain: (p) => <IconBase {...p} d={<><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></>} />,
+            Database: (p) => <IconBase {...p} d={<><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>} />,
+            Lock: (p) => <IconBase {...p} d={<><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>} />,
+            Youtube: (p) => <IconBase {...p} d={<><path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17"/><path d="m10 15 5-3-5-3z"/></>} />,
+            PlayCircle: (p) => <IconBase {...p} d={<><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></>} />,
+            Briefcase: (p) => <IconBase {...p} d={<><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></>} />,
+            AlertCircle: (p) => <IconBase {...p} d={<><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>} />
+        };
+
+        const LogoPXW = () => (
+            <div className="flex items-center gap-3">
+                <div className="relative w-14 h-14 flex-shrink-0 transition-transform hover:scale-105 duration-300">
+                <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-lg" fill="none">
+                    <defs>
+                        <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor="#22d3ee" />
+                            <stop offset="100%" stopColor="#2563eb" />
+                        </linearGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="50" fill="url(#logoGrad)" />
+                    <path d="M18 32 H30 L35 22 L40 42 L45 32 H52" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M56 24 H76 C79 24 81 26 81 29 V 39 C81 42 79 44 76 44 H60 L56 48 V 29 C56 26 58 24 56 24 Z" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    <text x="50" y="66" fontSize="34" fontFamily="Arial, sans-serif" fontWeight="900" fill="white" textAnchor="middle" letterSpacing="-1">PXW</text>
+                    <path d="M25 78 H40 L45 68 L50 88 L55 78 H75" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                </div>
+                <div className="flex flex-col justify-center">
+                <span className="font-black text-2xl leading-none text-gray-800 tracking-tighter">PXW</span>
+                <span className="text-[10px] font-bold text-blue-600 tracking-widest uppercase">PacientesXWSP</span>
+                </div>
+            </div>
+        );
+
+        const IntroView = ({ onStart }) => (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 space-y-8 animate-fade-in relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-64 h-64 bg-cyan-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 -translate-x-1/2 -translate-y-1/2"></div>
+                <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 translate-x-1/2 translate-y-1/2"></div>
+                <div className="bg-white p-6 rounded-3xl shadow-xl border border-blue-50 z-10 transform hover:scale-105 transition-all duration-300">
+                    <LogoPXW />
+                </div>
+                <div className="space-y-4 max-w-3xl z-10">
+                    <h1 className="text-4xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-tight">
+                        No es el precio... <br/>
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-500 to-blue-700">Es el mensaje correcto.</span>
+                    </h1>
+                    <p className="text-lg md:text-xl text-gray-600 leading-relaxed max-w-2xl mx-auto">
+                        Dominá los 6 perfiles y los 5 niveles de conciencia. Descarga mis guiones probados y la guía de comportamiento del consumidor.
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-4 mt-4">
+                        <a href="https://www.youtube.com/@pacienteswsp" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-bold rounded-full hover:bg-red-700 transition-all shadow-md hover:shadow-lg">
+                            <Icons.Youtube className="w-5 h-5" /> Ver Canal de YouTube
+                        </a>
+                    </div>
+                </div>
+                <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl border-t-4 border-blue-500 max-w-lg w-full z-10 mt-8">
+                    <h3 className="font-bold text-gray-800 mb-6 text-xl flex items-center justify-center gap-2">
+                        <Icons.Download className="w-6 h-6 text-blue-600" /> Accede a los Recursos Gratuitos
+                    </h3>
+                    <ul className="text-left space-y-4 text-gray-700 mb-8">
+                        <li className="flex items-start gap-3 bg-blue-50 p-3 rounded-lg">
+                            <Icons.CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <span className="text-sm font-medium">Guía: Comportamiento del Consumidor (6 Perfiles)</span>
+                        </li>
+                        <li className="flex items-start gap-3 bg-blue-50 p-3 rounded-lg">
+                            <Icons.CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <span className="text-sm font-medium">Scripts de Venta Universal para WhatsApp</span>
+                        </li>
+                    </ul>
+                    <button onClick={onStart} className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 flex items-center justify-center gap-2 text-lg">
+                        Comenzar Diagnóstico de Clínica <Icons.ArrowRight className="w-6 h-6" />
+                    </button>
+                </div>
+            </div>
+        );
+
+        const QuizView = ({ currentQuestion, handleAnswer, questions }) => (
+            <div className="max-w-xl mx-auto w-full px-4 animate-fade-in py-10">
+                <div className="mb-8">
+                    <div className="flex justify-between text-sm text-blue-600 font-semibold mb-2">
+                        <span>Pregunta {currentQuestion + 1} de {questions.length}</span>
+                        <span>Diagnóstico de Ventas</span>
+                    </div>
+                    <div className="w-full bg-blue-100 rounded-full h-3">
+                        <div className="bg-gradient-to-r from-cyan-500 to-blue-600 h-3 rounded-full transition-all duration-500 shadow-sm" style={{ width: `${((currentQuestion + 1) / questions.length) * 100}%` }}></div>
+                    </div>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-6 leading-snug">{questions[currentQuestion].question}</h2>
+                <div className="space-y-4">
+                    {questions[currentQuestion].options.map((opt, idx) => (
+                        <button key={idx} onClick={() => handleAnswer(opt.profile)} className="w-full text-left p-5 rounded-xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50 transition-all group shadow-sm hover:shadow-md">
+                            <span className="font-medium text-gray-700 group-hover:text-blue-800 text-lg">{opt.text}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+        );
+
+        const FormView = ({ formData, setFormData, handleSubmit, loading, emailError, setEmailError, quizProfile }) => (
+            <div className="max-w-md mx-auto w-full px-4 py-10 animate-fade-in">
+                <div className="text-center mb-8">
+                    <div className="inline-block p-4 bg-blue-100 rounded-full mb-4 animate-bounce">
+                        <Icons.Brain className="w-10 h-10 text-blue-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900">¡Diagnóstico Completado!</h2>
+                    <p className="text-gray-600 mt-2">
+                        Tu mayor área de oportunidad está en dominar al perfil: <br/>
+                        <span className="font-extrabold text-3xl text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500 block mt-2">{quizProfile}</span>
+                    </p>
+                    <p className="text-sm text-gray-500 mt-6 bg-blue-50 p-4 rounded-lg">Completa tus datos profesionales para enviarte los <strong>Scripts Exactos</strong>.</p>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-5 bg-white p-8 rounded-2xl shadow-2xl border border-gray-100">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Nombre Completo</label>
+                        <div className="relative">
+                            <Icons.User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                            <input required type="text" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="pl-10 w-full py-3 pr-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-800" placeholder="Ej. Dra. María Pérez" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Correo Electrónico</label>
+                        <div className="relative">
+                            <Icons.Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                            <input required type="email" value={formData.email} onChange={e => { setFormData({...formData, email: e.target.value}); setEmailError(''); }} className={`pl-10 w-full py-3 pr-3 border rounded-lg focus:ring-2 outline-none transition-all text-gray-800 ${emailError ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'}`} placeholder="maria@clinica.com" />
+                        </div>
+                        {emailError && <p className="text-xs text-red-500 mt-1 flex items-center gap-1 animate-pulse"><Icons.AlertCircle className="w-3 h-3" /> {emailError}</p>}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Tu Rol Profesional</label>
+                        <div className="relative">
+                            <Icons.Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400" />
+                            <select required value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value})} className="pl-10 w-full py-3 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-800 bg-white appearance-none cursor-pointer">
+                                <option value="" disabled>Selecciona una opción</option>
+                                <option value="Gerente de Clínica">Gerente / Dueño de Clínica</option>
+                                <option value="Médico / Doctor">Médico / Doctor</option>
+                                <option value="Marketero">Marketero / Agencia</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▼</div>
+                        </div>
+                    </div>
+                    <button type="submit" disabled={loading} className="w-full bg-gray-900 text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition-all transform hover:scale-[1.02] flex justify-center items-center gap-3 shadow-lg">
+                        {loading ? 'Validando...' : 'DESBLOQUEAR ESTRATEGIA'}
+                        {!loading && <Icons.Download className="w-5 h-5" />}
+                    </button>
+                    {isDemoMode && <p className="text-xs text-orange-500 text-center">Modo Demo: Añade tu config de Firebase para guardar datos.</p>}
+                </form>
+            </div>
+        );
+
+        const SuccessView = ({ nombre }) => (
+            <div className="max-w-3xl mx-auto w-full px-4 py-10 animate-fade-in text-center">
+                <div className="inline-block p-5 bg-green-100 rounded-full mb-6 shadow-sm">
+                    <Icons.CheckCircle className="w-16 h-16 text-green-600" />
+                </div>
+                <h2 className="text-4xl font-extrabold text-gray-900 mb-4">¡Registro Exitoso!</h2>
+                <p className="text-gray-600 mb-10 max-w-xl mx-auto text-lg">Bienvenido a la comunidad <strong>PXW</strong>, {nombre}. Aquí tienes tus herramientas.</p>
+                <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+                    <div className="bg-white p-8 rounded-2xl shadow-lg border border-blue-100 hover:border-blue-300 transition-all group relative overflow-hidden flex flex-col">
+                        <div className="absolute top-0 right-0 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">GUÍA PDF</div>
+                        <div className="bg-blue-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                            <Icons.BookOpen className="w-8 h-8 text-blue-600" />
+                        </div>
+                        <h3 className="font-bold text-gray-900 text-xl mb-2">Comportamiento del Consumidor</h3>
+                        <p className="text-sm text-gray-500 mb-6 flex-grow">Análisis profundo de los 6 perfiles psicológicos.</p>
+                        <a href={RECURSOS_CONFIG.GUIA_COMPORTAMIENTO} target="_blank" rel="noopener noreferrer" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto">
+                            <Icons.Download className="w-4 h-4" /> Descargar Guía
+                        </a>
+                    </div>
+                    <div className="bg-white p-8 rounded-2xl shadow-lg border border-cyan-100 hover:border-cyan-300 transition-all group relative overflow-hidden flex flex-col">
+                        <div className="absolute top-0 right-0 bg-cyan-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">SCRIPTS PDF</div>
+                        <div className="bg-cyan-50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                            <Icons.MessageCircle className="w-8 h-8 text-cyan-600" />
+                        </div>
+                        <h3 className="font-bold text-gray-900 text-xl mb-2">Guiones de Venta WhatsApp</h3>
+                        <p className="text-sm text-gray-500 mb-6 flex-grow">Copys exactos para copiar y pegar.</p>
+                        <a href={RECURSOS_CONFIG.SCRIPTS_VENTAS} target="_blank" rel="noopener noreferrer" className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 mt-auto">
+                            <Icons.Download className="w-4 h-4" /> Descargar Scripts
+                        </a>
+                    </div>
+                </div>
+                <div className="mt-12 bg-gradient-to-r from-gray-900 to-gray-800 p-8 rounded-2xl text-white shadow-xl max-w-2xl mx-auto">
+                    <h4 className="font-bold text-2xl mb-2 flex items-center justify-center gap-2">
+                        <Icons.PlayCircle className="w-6 h-6 text-red-500" /> No te pierdas la serie completa
+                    </h4>
+                    <p className="text-gray-300 mb-6">Aprende a aplicar estos conceptos en video en mi canal de YouTube.</p>
+                    <a href="https://www.youtube.com/@pacienteswsp" target="_blank" rel="noreferrer" className="inline-block bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-full transition-all hover:shadow-lg hover:scale-105">
+                        Ir a PacientesXWSP en YouTube
+                    </a>
+                </div>
+            </div>
+        );
+
+        const AdminView = ({ leads, onBack }) => (
+            <div className="max-w-4xl mx-auto w-full px-4 py-10 animate-fade-in bg-white/95 min-h-screen">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <Icons.Database className="w-6 h-6 text-red-600" /> Base de Datos Secreta (Admin)
+                    </h2>
+                    <button onClick={onBack} className="text-sm text-gray-500 hover:text-red-600 underline">Cerrar Sesión</button>
+                </div>
+                {isDemoMode && <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg text-sm"><strong>⚠️ MODO DEMO:</strong> Configura Firebase para ver datos reales.</div>}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-100 border-b border-gray-200">
+                                <tr>
+                                    <th className="p-4 font-semibold text-gray-700">Fecha</th>
+                                    <th className="p-4 font-semibold text-gray-700">Nombre</th>
+                                    <th className="p-4 font-semibold text-gray-700">Email</th>
+                                    <th className="p-4 font-semibold text-gray-700">Rol</th>
+                                    <th className="p-4 font-semibold text-gray-700">Resultado</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {leads.length === 0 ? <tr><td colSpan={5} className="p-8 text-center text-gray-500">No hay registros aún.</td></tr> : leads.map((lead, i) => (
+                                    <tr key={lead.id || i} className="hover:bg-gray-50">
+                                        <td className="p-4 text-gray-500">{lead.fecha ? new Date(lead.fecha.seconds * 1000).toLocaleDateString() : 'Ahora'}</td>
+                                        <td className="p-4 font-medium">{lead.nombre}</td>
+                                        <td className="p-4 text-gray-600">{lead.email}</td>
+                                        <td className="p-4"><span className="bg-gray-200 px-2 py-1 rounded text-xs">{lead.rol}</span></td>
+                                        <td className="p-4"><span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-bold">{lead.quizResult}</span></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        );
+
+        function App() {
+            const [step, setStep] = React.useState('intro');
+            const [currentQuestion, setCurrentQuestion] = React.useState(0);
+            const [quizProfile, setQuizProfile] = React.useState('');
+            const [user, setUser] = React.useState(null);
+            const [formData, setFormData] = React.useState({ nombre: '', email: '', rol: '' });
+            const [loading, setLoading] = React.useState(false);
+            const [emailError, setEmailError] = React.useState('');
+            const [secretClicks, setSecretClicks] = React.useState(0);
+            const [leads, setLeads] = React.useState([]);
+            const [demoLeads, setDemoLeads] = React.useState([]);
+
+            const questions = [
+                { id: 1, question: "¿Cuál es la objeción más frustrante que recibes por WhatsApp?", options: [{ text: "'Es muy caro' o 'En otro lado me cobran menos'.", profile: "La Calculadora" }, { text: "'Lo voy a pensar' o 'Me da miedo quedar mal'.", profile: "La Prudente" }, { text: "Me piden mil detalles técnicos y al final no agendan.", profile: "La Científica" }, { text: "Quieren citas inmediatas y se molestan si no hay lugar.", profile: "La Urgente" }] },
+                { id: 2, question: "¿Qué sientes que le falta a tu estrategia actual de marketing?", options: [{ text: "Atraigo muchos curiosos, pero pocos pacientes de calidad.", profile: "La Viral" }, { text: "Mis pacientes no regresan, me falta fidelización.", profile: "La Previsora" }, { text: "Me cuesta transmitir el valor de mi experiencia/títulos.", profile: "La Científica" }, { text: "No logro cerrar ventas rápidas, los chats se hacen eternos.", profile: "La Urgente" }] }
+            ];
+
+            React.useEffect(() => {
+                if (isDemoMode) { setUser({ uid: "demo", isAnonymous: true }); return; }
+                const initAuth = async () => { try { await signInAnonymously(auth); } catch(e) { console.error(e); } };
+                initAuth();
+                const unsubscribe = onAuthStateChanged(auth, setUser);
+                return () => unsubscribe();
+            }, []);
+
+            React.useEffect(() => {
+                if (isDemoMode) { setLeads(demoLeads); return; }
+                if (!user) return;
+                const q = query(collection(db, 'leads'));
+                const unsub = onSnapshot(q, (snap) => {
+                    const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    data.sort((a,b) => (b.fecha?.seconds || 0) - (a.fecha?.seconds || 0));
+                    setLeads(data);
+                }, () => {});
+                return () => unsub();
+            }, [user, demoLeads, step]);
+
+            const handleSecretClick = () => {
+                const newCount = secretClicks + 1;
+                setSecretClicks(newCount);
+                if (newCount >= 5) { setStep('admin'); setSecretClicks(0); }
+            };
+
+            const handleAnswer = (profile) => {
+                if (currentQuestion < questions.length - 1) { setQuizProfile(profile); setCurrentQuestion(currentQuestion + 1); }
+                else { setQuizProfile(profile); setStep('form'); }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setEmailError('Email inválido.'); return; }
+                if (!formData.rol) { alert("Selecciona tu rol."); return; }
+                setLoading(true);
+                const newLead = { ...formData, quizResult: quizProfile, fecha: isDemoMode ? { seconds: Date.now()/1000 } : Timestamp.now() };
+                if (isDemoMode) {
+                    setTimeout(() => { setDemoLeads(prev => [newLead, ...prev]); setStep('success'); setLoading(false); }, 1000);
+                    return;
+                }
+                try {
+                    await addDoc(collection(db, 'leads'), newLead);
+                    setStep('success');
+                } catch (error) {
+                    console.error(error); alert("Error al guardar.");
+                } finally { setLoading(false); }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 font-sans text-gray-900">
+                    {step !== 'admin' && (
+                        <nav className="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+                            <div className="max-w-6xl mx-auto px-4 h-20 flex items-center justify-between">
+                                <div onClick={() => setStep('intro')} className="cursor-pointer"><LogoPXW /></div>
+                            </div>
+                        </nav>
+                    )}
+                    <main className="flex flex-col items-center pt-8 pb-20">
+                        {step === 'intro' && <IntroView onStart={() => setStep('quiz')} />}
+                        {step === 'quiz' && <QuizView currentQuestion={currentQuestion} handleAnswer={handleAnswer} questions={questions} />}
+                        {step === 'form' && <FormView formData={formData} setFormData={setFormData} handleSubmit={handleSubmit} loading={loading} emailError={emailError} setEmailError={setEmailError} quizProfile={quizProfile} />}
+                        {step === 'success' && <SuccessView nombre={formData.nombre} />}
+                        {step === 'admin' && <AdminView leads={leads} onBack={() => setStep('intro')} />}
+                    </main>
+                    {step !== 'admin' && (
+                        <footer className="w-full bg-white border-t border-gray-200 py-8 text-center">
+                            <div className="flex flex-col items-center gap-4">
+                                <a href="https://www.youtube.com/@pacienteswsp" target="_blank" rel="noreferrer" className="text-gray-400 hover:text-red-600 transition-colors"><Icons.Youtube className="w-6 h-6" /></a>
+                                <p onClick={handleSecretClick} className="text-sm text-gray-500 secret-trigger select-none hover:text-gray-700 transition-colors" title="Acceso Admin">© 2024 PacientesXWSP. Todos los derechos reservados.</p>
+                            </div>
+                        </footer>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
