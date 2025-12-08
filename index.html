@@ -529,7 +529,8 @@
                     } else {
                 console.warn('⚠️ Firebase no disponible, saltando guardado');                    }
             }
-            setStep('success');                        } catch (error) {
+            setStep('success');
+                    } catch (error) {
                 console.error('❌ ERROR AL GUARDAR EN FIREBASE:', error);
         console.error('Código:', error.code);
         alert('ERROR: ' + error.message);
