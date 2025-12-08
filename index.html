@@ -534,8 +534,8 @@
                             console.error('❌ ERROR AL GUARDAR EN FIREBASE:', error);
         console.error('Detalles del error:', error.message);
         console.error('Código:', error.code);
-        alert('ERROR: ' + error.message);
-        // setStep('success');  // DESACTIVADO PARA DEBUG
+        console.error('ERROR: ' + error.message);
+            setStep('success');
                 } finally { 
                     setLoading(false); 
                 }
