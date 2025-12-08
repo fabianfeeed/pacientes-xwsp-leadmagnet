@@ -512,6 +512,16 @@
                 if (!formData.rol) { alert("Selecciona tu rol."); return; }
                 setLoading(true);
                 
+        // === LOGS DE DEBUG ===
+        console.log('📘 Iniciando guardado...');
+        console.log('isOfflineMode:', isOfflineMode);
+        console.log('firebaseInitialized:', firebaseInitialized);
+        console.log('db:', db);
+        console.log('auth:', auth);
+        console.log('user:', user);
+        console.log('formData:', formData);
+        console.log('quizProfile:', quizProfile);
+                
                 try {
                     if (!isOfflineMode && firebaseInitialized) {
                         const newLead = { ...formData, quizResult: quizProfile, fecha: Timestamp.now() };
@@ -521,7 +531,11 @@
                     }
                     setStep('success');
                 } catch (error) {
-                    setStep('success'); 
+                            console.error('❌ ERROR AL GUARDAR EN FIREBASE:', error);
+        console.error('Detalles del error:', error.message);
+        console.error('Código:', error.code);
+        alert('ERROR: ' + error.message);
+        // setStep('success');  // DESACTIVADO PARA DEBUG
                 } finally { 
                     setLoading(false); 
                 }
