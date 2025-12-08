@@ -523,8 +523,8 @@
         console.log('quizProfile:', quizProfile);
                 
                 try {
-                    if (!isOfflineMode && firebaseInitialized) {
-                        const newLead = { ...formData, quizResult: quizProfile, fecha: Timestamp.now() };
+            if (firebaseInitialized && db) {
+                const newLead = { ...formData, quizResult: quizProfile, fecha: Timestamp.now() };
                         await addDoc(collection(db, 'leads'), newLead);
                     } else {
                         await new Promise(r => setTimeout(r, 800)); // Simular espera breve
