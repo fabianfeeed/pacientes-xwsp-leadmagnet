@@ -523,16 +523,14 @@
         console.log('quizProfile:', quizProfile);
                 
                 try {
-                    if (!isOfflineMode && firebaseInitialized) {
-                        const newLead = { ...formData, quizResult: quizProfile, fecha: Timestamp.now() };
+            if (firebaseInitialized && db) {                        const newLead = { ...formData, quizResult: quizProfile, fecha: Timestamp.now() };
                         await addDoc(collection(db, 'leads'), newLead);
+                                                            console.log('✅ GUARDADO EN FIREBASE EXITOSO');
                     } else {
-                        await new Promise(r => setTimeout(r, 800)); // Simular espera breve
-                    }
-                    setStep('success');
-                } catch (error) {
-                            console.error('❌ ERROR AL GUARDAR EN FIREBASE:', error);
-        console.error('Detalles del error:', error.message);
+                console.warn('⚠️ Firebase no disponible, saltando guardado');                    }
+            }
+            setStep('success');                        } catch (error) {
+                console.error('❌ ERROR AL GUARDAR EN FIREBASE:', error);
         console.error('Código:', error.code);
         alert('ERROR: ' + error.message);
         // setStep('success');  // DESACTIVADO PARA DEBUG
