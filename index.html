@@ -527,9 +527,10 @@
                         await addDoc(collection(db, 'leads'), newLead);
                                                             console.log('✅ GUARDADO EN FIREBASE EXITOSO');
                     } else {
-                console.warn('⚠️ Firebase no disponible, saltando guardado');                    }
+                console.warn('⚠️ Firebase no disponible, saltando guardado');                    
             }
-            setStep('success');
+                            setStep('success');
+                        }
                     } catch (error) {
                 console.error('❌ ERROR AL GUARDAR EN FIREBASE:', error);
         console.error('Código:', error.code);
